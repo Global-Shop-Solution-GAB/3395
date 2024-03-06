@@ -1,0 +1,239 @@
+Program.Sub.ScreenSU.Start
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+
+
+Variable.UDT.uPL.Define("PRODUCT_LINE",String,PRODUCT_LINE)
+Variable.UDT.uPL.Define("PROD_DESC",String,PRODUCT_LINE_DESC)
+Variable.uGlobal.uPL.Declare("uPL")
+Variable.Global.sPLDesc.Declare(String)
+Program.Sub.Preflight.End
+
+
+Program.Sub.Main.Start
+'Quote 3643
+'ERM
+F.Intrinsic.UI.InvokeWaitDialog("Loading...","PleaseWait...")
+F.ODBC.Connection!con.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+'prior is order date prior to todays date
+F.Intrinsic.Control.CallSub(Prior)
+F.Intrinsic.UI.ChangeWaitStatus("Loading New Orders...")
+'current is order date on todays date
+F.Intrinsic.Control.CallSub(Current)
+F.Intrinsic.UI.ChangeWaitStatus("Loading Orders Invoiced...")
+'hist is invoiced on todays date
+F.Intrinsic.Control.CallSub(Hist)
+F.Intrinsic.UI.ChangeWaitStatus("Loading Report...")
+F.Intrinsic.Control.CallSub(Report)
+
+F.Intrinsic.Control.CallSub(Unload)
+
+Program.Sub.Main.End
+
+
+Program.Sub.Prior.Start
+V.Local.sSQL.Declare(String)
+V.Local.sDate.Declare(String)
+V.Local.sPLdesc.Declare(String)
+
+F.Intrinsic.String.Concat("Delete From GCG_3395_DAILY_ORDERS Where TERMINAL = '",V.Caller.Terminal,"'",V.Local.sSQL)
+F.ODBC.Connection!con.Execute(V.Local.sSQL)
+
+F.Intrinsic.UI.ChangeWaitStatus("Loading Previous Orders...")
+
+F.Intrinsic.String.Format(V.Ambient.Date,"YYYY-MM-DD",V.Local.sDate)
+'V.Local.sDate.Set("2012-05-20")
+F.Intrinsic.String.Concat("Select Order_No,Date_Order From V_ORDER_HEADER where DATE_ORDER < '",V.Local.sDate,"' Order by ORDER_NO",V.Local.sSQL)
+F.ODBC.Connection!con.OpenRecordsetRO("rst",V.Local.sSQL)
+F.Intrinsic.Control.If(V.ODBC.con!rst.EOF,=,False)
+	F.Intrinsic.Control.DoUntil(V.ODBC.con!rst.EOF,=,True)
+		F.Intrinsic.String.Concat("Select Product_Line, Extension From V_ORDER_LINES Where ORDER_NO = '",V.ODBC.con!rst.FieldValTrim!ORDER_NO,"'",V.Local.sSQL)
+		F.ODBC.Connection!con.OpenRecordsetRO("rstLine",V.Local.sSQL)
+		F.Intrinsic.Control.If(V.ODBC.con!rstLine.EOF,=,False)
+			F.Intrinsic.Control.DoUntil(V.ODBC.con!rstLine.EOF,=,True)
+				F.Intrinsic.Control.CallSub(Pl,"PL",V.ODBC.con!rstLine.FieldValTrim!PRODUCT_LINE)
+				F.Intrinsic.String.Concat("Select * From GCG_3395_DAILY_ORDERS Where Terminal = '",V.Caller.Terminal,"'",V.Local.sSQL)
+				F.ODBC.Connection!con.OpenRecordsetRW("rstDaily",V.Local.sSQL)
+				F.Intrinsic.Control.If(V.ODBC.con!rstDaily.EOF,=,True)
+					F.ODBC.con!rstDaily.AddNew
+					F.ODBC.con!rstDaily.Set!TERMINAL(V.Caller.Terminal)
+					F.ODBC.con!rstDaily.Set!PRODUCT_LINE(V.ODBC.con!rstLine.FieldValTrim!PRODUCT_LINE)
+					F.ODBC.con!rstDaily.Set!PRODUCT_LINE_DESC(V.Global.sPLdesc)
+					F.ODBC.con!rstDaily.Set!PRIOR(V.ODBC.con!rstLine.FieldValFloat!EXTENSION)
+					F.ODBC.con!rstDaily.Set!DATE_ORDER(V.ODBC.con!rst.FieldValTrim!DATE_ORDER)
+					F.ODBC.con!rstDaily.Set!GROUPBY(0)
+				F.Intrinsic.Control.Else
+					F.ODBC.con!rstDaily.AddNew
+					F.ODBC.con!rstDaily.Set!TERMINAL(V.Caller.Terminal)
+					F.ODBC.con!rstDaily.Set!PRODUCT_LINE(V.ODBC.con!rstLine.FieldValTrim!PRODUCT_LINE)
+					F.ODBC.con!rstDaily.Set!PRODUCT_LINE_DESC(V.Global.sPLdesc)
+					F.ODBC.con!rstDaily.Set!PRIOR(V.ODBC.con!rstLine.FieldValFloat!EXTENSION)
+					F.ODBC.con!rstDaily.Set!DATE_ORDER(V.ODBC.con!rst.FieldValTrim!DATE_ORDER)
+					F.ODBC.con!rstDaily.Set!GROUPBY(0)
+				F.Intrinsic.Control.EndIf
+				F.ODBC.con!rstDaily.Update
+				F.ODBC.con!rstDaily.Close
+				F.ODBC.con!rstLine.MoveNext
+			F.Intrinsic.Control.Loop
+		F.Intrinsic.Control.EndIf
+		F.ODBC.con!rstLine.Close
+		F.ODBC.con!rst.MoveNext
+	F.Intrinsic.Control.Loop
+F.Intrinsic.Control.EndIf
+F.ODBC.con!rst.Close
+F.Intrinsic.Control.ExitSub
+
+
+Program.Sub.Prior.End
+
+
+Program.Sub.Current.Start
+V.Local.sSQL.Declare(String)
+V.Local.sDate.Declare(String)
+V.Local.i.Declare(Long)
+
+
+F.Intrinsic.String.Format(V.Ambient.Date,"YYYY-MM-DD",V.Local.sDate)
+'V.Local.sDate.Set("2012-06-20")
+F.Intrinsic.String.Concat("Select Order_No,Date_Order From V_ORDER_HEADER where DATE_ORDER = '",V.Local.sDate,"' Order by ORDER_NO",V.Local.sSQL)
+F.ODBC.Connection!con.OpenRecordsetRO("rst",V.Local.sSQL)
+F.Intrinsic.Control.If(V.ODBC.con!rst.EOF,=,False)
+	F.Intrinsic.Control.DoUntil(V.ODBC.con!rst.EOF,=,True)
+		F.Intrinsic.String.Concat("Select Product_Line, Extension From V_ORDER_LINES Where ORDER_NO = '",V.ODBC.con!rst.FieldValTrim!ORDER_NO,"'",V.Local.sSQL)
+		F.ODBC.Connection!con.OpenRecordsetRO("rstLine",V.Local.sSQL)
+		F.Intrinsic.Control.If(V.ODBC.con!rstLine.EOF,=,False)
+			F.Intrinsic.Control.DoUntil(V.ODBC.con!rstLine.EOF,=,True)
+				F.Intrinsic.Control.CallSub(Pl,"PL",V.ODBC.con!rstLine.FieldValTrim!PRODUCT_LINE)
+				F.Intrinsic.String.Concat("Select * From GCG_3395_DAILY_ORDERS Where Terminal = '",V.Caller.Terminal,"'",V.Local.sSQL)
+				F.ODBC.Connection!con.OpenRecordsetRW("rstDaily",V.Local.sSQL)
+				F.Intrinsic.Control.If(V.ODBC.con!rstDaily.EOF,=,True)
+					F.ODBC.con!rstDaily.AddNew
+					F.ODBC.con!rstDaily.Set!TERMINAL(V.Caller.Terminal)
+					F.ODBC.con!rstDaily.Set!PRODUCT_LINE(V.ODBC.con!rstLine.FieldValTrim!PRODUCT_LINE)
+					F.ODBC.con!rstDaily.Set!PRODUCT_LINE_DESC(V.Global.sPLdesc)
+					F.ODBC.con!rstDaily.Set!CURRENT_EXT(V.ODBC.con!rstLine.FieldValFloat!EXTENSION)
+					F.ODBC.con!rstDaily.Set!DATE_ORDER(V.ODBC.con!rst.FieldValTrim!DATE_ORDER)
+					F.ODBC.con!rstDaily.Set!GROUPBY(1)
+				F.Intrinsic.Control.Else
+					F.ODBC.con!rstDaily.AddNew
+					F.ODBC.con!rstDaily.Set!TERMINAL(V.Caller.Terminal)
+					F.ODBC.con!rstDaily.Set!PRODUCT_LINE(V.ODBC.con!rstLine.FieldValTrim!PRODUCT_LINE)
+					F.ODBC.con!rstDaily.Set!PRODUCT_LINE_DESC(V.Global.sPLdesc)
+					F.ODBC.con!rstDaily.Set!CURRENT_EXT(V.ODBC.con!rstLine.FieldValFloat!EXTENSION)
+					F.ODBC.con!rstDaily.Set!DATE_ORDER(V.ODBC.con!rst.FieldValTrim!DATE_ORDER)
+					F.ODBC.con!rstDaily.Set!GROUPBY(1)
+				F.Intrinsic.Control.EndIf
+				F.ODBC.con!rstDaily.Update
+				F.ODBC.con!rstDaily.Close
+				F.ODBC.con!rstLine.MoveNext
+			F.Intrinsic.Control.Loop
+		F.Intrinsic.Control.EndIf
+		F.ODBC.con!rstLine.Close
+		F.ODBC.con!rst.MoveNext
+	F.Intrinsic.Control.Loop
+F.Intrinsic.Control.EndIf
+F.ODBC.con!rst.Close
+F.Intrinsic.Control.ExitSub
+
+Program.Sub.Current.End
+
+
+Program.Sub.Hist.Start
+V.Local.sSQL.Declare(String)
+V.Local.sDate.Declare(String)
+
+F.Intrinsic.String.Format(V.Ambient.Date,"YYYY-MM-DD",V.Local.sDate)
+'V.Local.sDate.Set("2012-03-23")
+F.Intrinsic.String.Concat("Select Order_No,Date_Invoice From V_ORDER_HIST_HEAD where DATE_INVOICE = '",V.Local.sDate,"' Order by ORDER_NO",V.Local.sSQL)
+F.ODBC.Connection!con.OpenRecordsetRO("rst",V.Local.sSQL)
+F.Intrinsic.Control.If(V.ODBC.con!rst.EOF,=,False)
+	F.Intrinsic.Control.DoUntil(V.ODBC.con!rst.EOF,=,True)
+		F.Intrinsic.String.Concat("Select Product_Line, Extension From V_ORDER_HIST_LINE Where ORDER_NO = '",V.ODBC.con!rst.FieldValTrim!ORDER_NO,"'",V.Local.sSQL)
+		F.ODBC.Connection!con.OpenRecordsetRO("rstLine",V.Local.sSQL)
+		F.Intrinsic.Control.If(V.ODBC.con!rstLine.EOF,=,False)
+			F.Intrinsic.Control.DoUntil(V.ODBC.con!rstLine.EOF,=,True)
+				F.Intrinsic.Control.CallSub(Pl,"PL",V.ODBC.con!rstLine.FieldValTrim!PRODUCT_LINE)
+				F.Intrinsic.String.Concat("Select * From GCG_3395_DAILY_ORDERS Where Terminal = '",V.Caller.Terminal,"'",V.Local.sSQL)
+				F.ODBC.Connection!con.OpenRecordsetRW("rstDaily",V.Local.sSQL)
+				F.Intrinsic.Control.If(V.ODBC.con!rstDaily.EOF,=,True)
+					F.ODBC.con!rstDaily.AddNew
+					F.ODBC.con!rstDaily.Set!TERMINAL(V.Caller.Terminal)
+					F.ODBC.con!rstDaily.Set!PRODUCT_LINE(V.ODBC.con!rstLine.FieldValTrim!PRODUCT_LINE)
+					F.ODBC.con!rstDaily.Set!PRODUCT_LINE_DESC(V.Global.sPLdesc)
+					F.ODBC.con!rstDaily.Set!HIST(V.ODBC.con!rstLine.FieldValFloat!EXTENSION)
+					F.ODBC.con!rstDaily.Set!GROUPBY(2)
+					F.ODBC.con!rstDaily.Set!DATE_ORDER(V.ODBC.con!rst.FieldValTrim!DATE_INVOICE)
+				F.Intrinsic.Control.Else
+					F.ODBC.con!rstDaily.AddNew
+					F.ODBC.con!rstDaily.Set!TERMINAL(V.Caller.Terminal)
+					F.ODBC.con!rstDaily.Set!PRODUCT_LINE(V.ODBC.con!rstLine.FieldValTrim!PRODUCT_LINE)
+					F.ODBC.con!rstDaily.Set!PRODUCT_LINE_DESC(V.Global.sPLdesc)
+					F.ODBC.con!rstDaily.Set!HIST(V.ODBC.con!rstLine.FieldValFloat!EXTENSION)
+					F.ODBC.con!rstDaily.Set!GROUPBY(2)
+					F.ODBC.con!rstDaily.Set!DATE_ORDER(V.ODBC.con!rst.FieldValTrim!DATE_INVOICE)
+				F.Intrinsic.Control.EndIf
+				F.ODBC.con!rstDaily.Update
+				F.ODBC.con!rstDaily.Close
+				F.ODBC.con!rstLine.MoveNext
+			F.Intrinsic.Control.Loop
+		F.Intrinsic.Control.EndIf
+		F.ODBC.con!rstLine.Close
+		F.ODBC.con!rst.MoveNext
+	F.Intrinsic.Control.Loop
+F.Intrinsic.Control.EndIf
+F.ODBC.con!rst.Close
+F.Intrinsic.Control.ExitSub
+
+
+Program.Sub.Hist.End
+
+
+Program.Sub.Unload.Start
+F.ODBC.Connection!con.Close
+F.Intrinsic.Control.End
+
+Program.Sub.Unload.End
+
+
+Program.Sub.Report.Start
+V.Local.sParam.Declare(String)
+V.Local.sParamVal.Declare(String)
+V.Local.iReport.Declare(Long)
+V.Local.sReportName.Declare(String)
+
+'F.Intrinsic.Debug.InvokeDebugger
+'F.Intrinsic.Debug.Stop
+
+V.Local.sParam.Set("Terminal")
+V.Local.sParamVal.Set(V.Caller.Terminal)
+F.Intrinsic.UI.CloseWaitDialog
+F.Intrinsic.String.Concat(V.Caller.BusintDir,"\CUSTOM\GCG_3395_DAILY_ORDERS.rpt",V.Local.sReportName)
+F.Global.BI.InitializeReport("Daily Orders",V.Local.sReportName,V.Local.iReport)
+F.Global.BI.PrintReport(V.Local.iReport,0,V.Local.sParam,V.Local.sParamVal,"",False)
+
+Program.Sub.Report.End
+
+
+Program.Sub.PL.Start
+V.Local.sSQL.Declare(String)
+V.Local.sPL.Declare(String)
+
+V.Local.sPL.Set(V.Args.PL)
+F.Intrinsic.String.Concat("Select * From V_PRODUCT_LINE where PRODUCT_LINE = '",V.Args.PL,"'",V.Local.sSQL)
+F.ODBC.Connection!con.OpenRecordsetRO("rstPL",V.Local.sSQL)
+F.Intrinsic.Control.If(V.ODBC.con!rstPL.EOF,=,False)
+	V.Global.sPLdesc.Set(V.ODBC.con!rstPL.FieldValTrim!PRODUCT_LINE_DESC)
+F.Intrinsic.Control.Else
+	V.Global.sPLDesc.Set("")
+F.Intrinsic.Control.EndIf
+F.ODBC.con!rstPL.Close
+
+Program.Sub.PL.End
+
+
+Program.Sub.Comments.Start
+${$0$}$GCG_DAILY_ORDERS$}$ERIC$}$6/26/2012
+${$3$}$0$}$$}$-1$}$-1$}$$}$1/1/1900$}$Quote 3643
+Program.Sub.Comments.End
+
